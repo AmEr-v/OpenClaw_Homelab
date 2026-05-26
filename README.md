@@ -123,7 +123,7 @@ These are **not** the same as the two API tokens above. They are the keys, token
 
 ```bash
 # 1. Clone and enter the project
-git clone https://github.com/YOURNAME/openclaw-homelab.git
+https://github.com/AmEr-v/OpenClaw_Homelab.git
 cd openclaw-homelab
 
 # 2. Create your config and workspace directories
