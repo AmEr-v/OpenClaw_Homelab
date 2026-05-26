@@ -1,0 +1,24 @@
+# ════════════════════════════════════════════════════════
+#  SSH config for OpenClaw remote command execution
+#  Copy to `ssh_config` and edit. (`ssh_config` is gitignored.)
+#  Replace the host IPs with your own. Use a DEDICATED key,
+#  not your personal one.
+# ════════════════════════════════════════════════════════
+
+Host proxmox
+    HostName 192.168.1.XXX
+    User root
+    IdentityFile ~/.ssh/id_ed25519
+    StrictHostKeyChecking accept-new
+
+Host truenas
+    HostName 192.168.1.XXX
+    User admin
+    IdentityFile ~/.ssh/id_ed25519
+    StrictHostKeyChecking accept-new
+
+Host pihole
+    HostName 192.168.1.XXX
+    User pi
+    IdentityFile ~/.ssh/id_ed25519
+    StrictHostKeyChecking accept-new

@@ -1,0 +1,111 @@
+services:
+  # ──────────────────────────────────────────────────────
+  # Gateway: the always-on server. Hosts the web dashboard,
+  # routes messages between channels (Telegram/Discord) and
+  # the LLM, and executes skills against your infrastructure.
+  # ──────────────────────────────────────────────────────
+  openclaw-gateway:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    container_name: openclaw-gateway
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      TZ: ${OPENCLAW_TZ:-UTC}
+
+      # ── LLM provider (set ONE in your .env) ──
+      ANTHROPIC_API_KEY: ${ANTHROPIC_API_KEY:-}
+      OPENAI_API_KEY: ${OPENAI_API_KEY:-}
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+      OPENROUTER_API_KEY: ${OPENROUTER_API_KEY:-}
+
+      # ── Web search ──
+      BRAVE_API_KEY: ${BRAVE_API_KEY:-}
+
+      # ── Infrastructure credentials (consumed by skills) ──
+      PVE_URL: ${PVE_URL:-}
+      PVE_TOKEN: ${PVE_TOKEN:-}
+      TRUENAS_URL: ${TRUENAS_URL:-}
+      TRUENAS_API_KEY: ${TRUENAS_API_KEY:-}
+      PIHOLE_API_URL: ${PIHOLE_API_URL:-}
+      PIHOLE_API_TOKEN: ${PIHOLE_API_TOKEN:-}
+      PIHOLE_INSECURE: ${PIHOLE_INSECURE:-false}
+
+    volumes:
+      # Persistent config + agent memory
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      # Files the agent can read/write
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+      # SSH keys for remote command execution (read-only)
+      - ${SSH_KEY_PATH}:/home/node/.ssh/id_ed25519:ro
+      - ${SSH_PUB_PATH}:/home/node/.ssh/id_ed25519.pub:ro
+      - ./ssh_config:/home/node/.ssh/config:ro
+      # Docker socket for sandboxed skill execution (optional)
+      # - /var/run/docker.sock:/var/run/docker.sock
+
+    # group_add:
+    #   - "${DOCKER_GID:-999}"
+
+    ports:
+      - "${OPENCLAW_GATEWAY_PORT:-18789}:18789"
+      - "${OPENCLAW_BRIDGE_PORT:-18790}:18790"
+
+    init: true
+    restart: unless-stopped
+
+    command:
+      [
+        "node",
+        "dist/index.js",
+        "gateway",
+        "--bind",
+        "${OPENCLAW_GATEWAY_BIND:-lan}",
+        "--port",
+        "18789",
+      ]
+
+    healthcheck:
+      test:
+        [
+          "CMD",
+          "node",
+          "-e",
+          "fetch('http://127.0.0.1:18789/healthz').then((r)=>process.exit(r.ok?0:1)).catch(()=>process.exit(1))",
+        ]
+      interval: 30s
+      timeout: 5s
+      retries: 5
+      start_period: 20s
+
+  # ──────────────────────────────────────────────────────
+  # CLI: a short-lived helper container. Shares the gateway's
+  # network namespace so commands like `channels add`,
+  # `pairing approve`, and `skills add` reach the gateway.
+  # Started on demand with `docker compose run --rm`.
+  # ──────────────────────────────────────────────────────
+  openclaw-cli:
+    image: ${OPENCLAW_IMAGE:-ghcr.io/openclaw/openclaw:latest}
+    container_name: openclaw-cli
+    network_mode: "service:openclaw-gateway"
+    cap_drop:
+      - NET_RAW
+      - NET_ADMIN
+    security_opt:
+      - no-new-privileges:true
+    environment:
+      HOME: /home/node
+      TERM: xterm-256color
+      OPENCLAW_GATEWAY_TOKEN: ${OPENCLAW_GATEWAY_TOKEN:-}
+      OPENCLAW_ALLOW_INSECURE_PRIVATE_WS: ${OPENCLAW_ALLOW_INSECURE_PRIVATE_WS:-}
+      BROWSER: echo
+      TZ: ${OPENCLAW_TZ:-UTC}
+    volumes:
+      - ${OPENCLAW_CONFIG_DIR}:/home/node/.openclaw
+      - ${OPENCLAW_WORKSPACE_DIR}:/home/node/.openclaw/workspace
+    stdin_open: true
+    tty: true
+    init: true
+    entrypoint: ["node", "dist/index.js"]
+    depends_on:
+      - openclaw-gateway
